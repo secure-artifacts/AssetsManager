@@ -1,16 +1,16 @@
 !include "MUI2.nsh"
 
-Name "MediaTools"
+Name "AssetsManager"
 
 # 接收从 GitHub Actions 传入的文件名
 !ifndef OUTFILE
-	OutFile "MediaTools-Default-Setup.exe"
+	OutFile "AssetsManager-Default-Setup.exe"
 !else
 	OutFile "${OUTFILE}"
 !endif
 
 # --- 关键修改：安装到用户本地应用数据目录 ---
-InstallDir "$LOCALAPPDATA\MediaTools"
+InstallDir "$LOCALAPPDATA\AssetsManager"
 
 # --- 关键修改：请求普通用户权限，不再弹出 UAC 盾牌 ---
 RequestExecutionLevel user
@@ -24,10 +24,10 @@ Section "MainSection" SEC01
 
 	# 将 Nuitka 生成的整个 dist 目录下的文件放入安装目录
 	# 确保 GitHub Actions 中的路径与此一致
-	File /r "dist-nuitka\MediaTools.dist\*"
+	File /r "dist-nuitka\AssetsManager.dist\*"
 
 	# 创建桌面快捷方式 (安装到当前用户的桌面)
-	CreateShortcut "$DESKTOP\MediaTools.lnk" "$INSTDIR\MediaTools.exe"
+	CreateShortcut "$DESKTOP\AssetsManager.lnk" "$INSTDIR\AssetsManager.exe"
 
 	# 写入卸载程序
 	WriteUninstaller "$INSTDIR\uninstall.exe"
