@@ -37,6 +37,13 @@ class DatabaseService(IDatabaseService):
     # Assets
     # ------------------------------------------------------------------
 
+    def _get_descendant_group_ids(self, s: Session, group_id: int) -> List[int]:
+        ids = [group_id]
+        children = s.query(Group.id).filter(Group.parent_id == group_id).all()
+        for (cid,) in children:
+            ids.extend(self._get_descendant_group_ids(s, cid))
+        return ids
+
     def get_assets(
         self,
         group_id: Optional[int] = None,
@@ -47,7 +54,8 @@ class DatabaseService(IDatabaseService):
         with self._Session() as s:
             q = s.query(Asset).options(joinedload(Asset.tags))
             if group_id is not None:
-                q = q.filter(Asset.group_id == group_id)
+                g_ids = self._get_descendant_group_ids(s, group_id)
+                q = q.filter(Asset.group_id.in_(g_ids))
             if tag_ids:
                 for tid in tag_ids:
                     q = q.filter(Asset.tags.any(Tag.id == tid))
@@ -170,7 +178,8 @@ class DatabaseService(IDatabaseService):
 
     def get_group_asset_count(self, group_id: int) -> int:
         with self._Session() as s:
-            return s.query(Asset).filter(Asset.group_id == group_id).count()
+            g_ids = self._get_descendant_group_ids(s, group_id)
+            return s.query(Asset).filter(Asset.group_id.in_(g_ids)).count()
 
     # ------------------------------------------------------------------
     # Tags

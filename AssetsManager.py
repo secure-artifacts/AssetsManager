@@ -74,6 +74,7 @@ def main() -> None:
 
     # Wire: scan finished → refresh list
     scan_ctrl.scanFinished.connect(library_model.refresh)
+    scan_ctrl.scanFinished.connect(lambda added: tag_ctrl.groupsChanged.emit() if added > 0 else None)
 
     # ------------------------------------------------------------------- QML
     engine = QQmlApplicationEngine()

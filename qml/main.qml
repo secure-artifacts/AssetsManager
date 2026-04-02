@@ -57,14 +57,24 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 0
 
+            Timer {
+                id: searchDebounce
+                interval: 300
+                property string pendingText: ""
+                onTriggered: {
+                    libraryModel.setSearchFilter(pendingText)
+                    if (pendingText === "") keyReceiver.forceActiveFocus()
+                }
+            }
+
             TopBar {
                 id: topBar
                 Layout.fillWidth: true
                 Layout.preferredHeight: 56
                 onScanRequested: (path) => scanController.startScan(path)
                 onSearchChanged: (text) => {
-                    libraryModel.setSearchFilter(text)
-                    if (text === "") keyReceiver.forceActiveFocus()
+                    searchDebounce.pendingText = text
+                    searchDebounce.restart()
                 }
             }
 
