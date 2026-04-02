@@ -49,10 +49,13 @@ class DragDropHandler(QObject):
         """
         paths: List[Path] = []
         for url in urls:
-            url = url.strip()
-            if url.startswith("file://"):
-                url = url[7:]
-            p = Path(url)
+            if isinstance(url, str):
+                u_str = url.strip()
+                if u_str.startswith("file://"):
+                    u_str = u_str[7:]
+                p = Path(u_str)
+            else:
+                p = Path(url.toLocalFile())
             if p.exists():
                 paths.append(p)
 

@@ -10,21 +10,24 @@ Item {
     property var asset: previewController.currentAsset
 
     // ── Media Player ───────────────────────────────────────────────────
+    AudioOutput {
+        id: audioOut
+    }
+
     MediaPlayer {
         id: player
         autoPlay: true
-        audioOutput: AudioOutput {}
+        audioOutput: audioOut
         videoOutput: videoOutput
         
         source: {
-            if (!asset || asset.file_type === "image") return ""
+            if (!root.visible || !asset || asset.file_type === "image") return ""
             let p = asset.file_path
-            return (p.startsWith("/") ? "file://" : "file:///") + p
+            return "file://" + p
         }
 
-        onPlaybackStateChanged: {
-            if (playbackState === MediaPlayer.StoppedState && asset && asset.file_type === "video" && root.visible)
-                player.play()
+        onErrorOccurred: (error, errorString) => {
+            console.error("MediaPlayer Error:", error, errorString, "source:", source)
         }
     }
 
@@ -133,7 +136,7 @@ Item {
         anchors { bottom: infoBar.top; horizontalCenter: parent.horizontalCenter; bottomMargin: 24 }
         width: Math.min(800, parent.width - 120); height: 48; radius: 24
         color: Qt.rgba(0.12, 0.12, 0.18, 0.9)
-        visible: asset && (asset.file_type === "video" || asset.file_type === "audio")
+        visible: !!asset && (asset.file_type === "video" || asset.file_type === "audio")
         
         MouseArea { anchors.fill: parent; onClicked: (mouse) => mouse.accepted = true }
 
@@ -151,7 +154,7 @@ Item {
                 }
             }
 
-            Text { text: formatTime(player.position); color: "#8A8A9A"; font.pixelSize: 11; font.family: "Monospace" }
+            Text { text: formatTime(player.position); color: "#8A8A9A"; font.pixelSize: 11 }
 
             Slider {
                 id: progressSlider
@@ -169,7 +172,7 @@ Item {
                 onMoved: player.setPosition(progressSlider.value)
             }
 
-            Text { text: formatTime(player.duration); color: "#8A8A9A"; font.pixelSize: 11; font.family: "Monospace" }
+            Text { text: formatTime(player.duration); color: "#8A8A9A"; font.pixelSize: 11 }
         }
     }
 
@@ -219,8 +222,7 @@ Item {
         return (min < 10 ? "0" + min : min) + ":" + (sec < 10 ? "0" + sec : sec)
     }
 
-    onVisibleChanged: { if (!visible) { player.stop(); player.source = "" } }
-    onAssetChanged: { player.stop(); if (visible && asset && (asset.file_type === "video" || asset.file_type === "audio")) player.play() }
+    onVisibleChanged: { if (!visible) { player.stop(); } }
 
     component NavArrow: Rectangle {
         property alias text: arrowLabel.text

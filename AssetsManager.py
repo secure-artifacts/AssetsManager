@@ -66,11 +66,11 @@ def main() -> None:
     tag_svc = TagService(db)
 
     # ---------------------------------------------------------------- Bridge
-    library_model = LibraryModel(db)
-    scan_ctrl = ScanController(db, thumb_gen)
-    tag_ctrl = TagController(tag_svc, library_model)
-    dnd_handler = DragDropHandler(db, file_ops, scan_ctrl, library_model)
-    preview_ctrl = PreviewController(library_model)
+    library_model = LibraryModel(db, parent=app)
+    scan_ctrl = ScanController(db, thumb_gen, parent=app)
+    tag_ctrl = TagController(tag_svc, library_model, parent=app)
+    dnd_handler = DragDropHandler(db, file_ops, scan_ctrl, library_model, parent=app)
+    preview_ctrl = PreviewController(library_model, parent=app)
 
     # Wire: scan finished → refresh list
     scan_ctrl.scanFinished.connect(library_model.refresh)
