@@ -62,7 +62,10 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 56
                 onScanRequested: (path) => scanController.startScan(path)
-                onSearchChanged: (text) => libraryModel.setSearchFilter(text)
+                onSearchChanged: (text) => {
+                    libraryModel.setSearchFilter(text)
+                    if (text === "") keyReceiver.forceActiveFocus()
+                }
             }
 
             // Divider

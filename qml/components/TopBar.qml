@@ -60,6 +60,14 @@ Rectangle {
                     font.pixelSize: 13
                     background: Item {}
                     onTextChanged: root.searchChanged(text)
+
+                    onAccepted: focus = false
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Escape) {
+                            focus = false
+                            event.accepted = true
+                        }
+                    }
                 }
             }
         }
@@ -76,7 +84,10 @@ Rectangle {
                 ]
                 delegate: FilterChip {
                     text: modelData.label
-                    onClicked: libraryModel.setFileTypeFilter(modelData.type)
+                    onClicked: {
+                        libraryModel.setFileTypeFilter(modelData.type)
+                        searchField.focus = false
+                    }
                 }
             }
         }
@@ -106,7 +117,10 @@ Rectangle {
                 color: importBtn.hovered ? "#9B8BFF" : "#7B68EE"
                 Behavior on color { ColorAnimation { duration: 150 } }
             }
-            onClicked: folderDialog.open()
+            onClicked: {
+                searchField.focus = false
+                folderDialog.open()
+            }
         }
     }
 
@@ -115,8 +129,7 @@ Rectangle {
         id: folderDialog
         title: "选择素材文件夹"
         onAccepted: {
-            let path = selectedFolder.toString().replace("file://", "")
-            root.scanRequested(path)
+            root.scanRequested(selectedFolder.toString())
         }
     }
 

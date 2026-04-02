@@ -33,10 +33,19 @@ class ScanController(QObject):
     def startScan(self, folder_path: str) -> None:
         if self._thread and self._thread.is_alive():
             return
+
+        # Convert URL to local path if needed (cross-platform fix)
+        from PySide6.QtCore import QUrl
+        url = QUrl(folder_path)
+        if url.isLocalFile():
+            local_path = url.toLocalFile()
+        else:
+            local_path = folder_path
+
         self.scanStarted.emit()
         self._thread = threading.Thread(
             target=self._run,
-            args=(folder_path,),
+            args=(local_path,),
             daemon=True,
         )
         self._thread.start()

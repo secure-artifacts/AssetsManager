@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, Optional
@@ -55,6 +57,7 @@ class FolderScanner(IScannerService):
         self._thumb_dir = thumb_dir or (Path.home() / ".assetsmanager" / "thumbnails")
         self._thumb_dir.mkdir(parents=True, exist_ok=True)
         self._cancelled = False
+        self._lock = threading.Lock()
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -82,47 +85,65 @@ class FolderScanner(IScannerService):
         # group_id cache: folder path str -> group id
         group_cache: Dict[str, Optional[int]] = {}
 
-        for idx, file_path in enumerate(all_files):
+        processed_count = 0
+        lock = threading.Lock()
+
+        def process_file(file_path: Path):
+            nonlocal processed_count
             if self._cancelled:
-                break
+                return
 
-            progress_callback(idx + 1, total, file_path.name)
+            try:
+                # 1. Check if already indexed
+                asset = self._db.get_asset_by_path(str(file_path))
+                if asset:
+                    asset_id = asset["id"]
+                else:
+                    # 2. Resolve group
+                    group_id = self._resolve_group(file_path, folder_path, group_cache)
 
-            # Skip already indexed
-            if self._db.get_asset_by_path(str(file_path)):
-                continue
+                    # 3. Build asset data
+                    stat = file_path.stat()
+                    ft = _file_type(file_path.suffix)
+                    data: dict = {
+                        "file_path": str(file_path),
+                        "file_name": file_path.name,
+                        "file_ext": file_path.suffix.lower(),
+                        "file_type": ft,
+                        "size_bytes": stat.st_size,
+                        "modified_date": datetime.fromtimestamp(stat.st_mtime),
+                        "group_id": group_id,
+                    }
 
-            group_id = self._resolve_group(file_path, folder_path, group_cache)
+                    # Image dimensions
+                    if ft == "image":
+                        try:
+                            from PIL import Image as PILImage
+                            with PILImage.open(file_path) as img:
+                                data["width"], data["height"] = img.size
+                        except Exception:
+                            pass
 
-            # Build asset data
-            stat = file_path.stat()
-            ft = _file_type(file_path.suffix)
-            data: dict = {
-                "file_path": str(file_path),
-                "file_name": file_path.name,
-                "file_ext": file_path.suffix.lower(),
-                "file_type": ft,
-                "size_bytes": stat.st_size,
-                "modified_date": datetime.fromtimestamp(stat.st_mtime),
-                "group_id": group_id,
-            }
+                    asset_id = self._db.add_asset(data)
 
-            # Image dimensions
-            if ft == "image":
-                try:
-                    from PIL import Image as PILImage
-                    with PILImage.open(file_path) as img:
-                        data["width"], data["height"] = img.size
-                except Exception:
-                    pass
+                # 4. Generate thumbnail if missing
+                thumb_path = self._thumb_dir / f"{asset_id}.jpg"
+                if not thumb_path.exists():
+                    if self._thumb_gen.can_handle(file_path):
+                        if self._thumb_gen.generate(file_path, thumb_path):
+                            self._db.update_asset_thumbnail(asset_id, str(thumb_path))
+            finally:
+                with lock:
+                    processed_count += 1
+                    progress_callback(processed_count, total, file_path.name)
 
-            asset_id = self._db.add_asset(data)
-
-            # Generate thumbnail
-            thumb_path = self._thumb_dir / f"{asset_id}.jpg"
-            if self._thumb_gen.can_handle(file_path):
-                if self._thumb_gen.generate(file_path, thumb_path):
-                    self._db.update_asset_thumbnail(asset_id, str(thumb_path))
+        # Use a thread pool for parallel processing
+        # Adjust max_workers as needed (e.g., number of cores or a fixed number)
+        with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
+            for file_path in all_files:
+                if self._cancelled:
+                    break
+                executor.submit(process_file, file_path)
 
     # ------------------------------------------------------------------
     def _resolve_group(
@@ -133,27 +154,33 @@ class FolderScanner(IScannerService):
     ) -> Optional[int]:
         folder = file_path.parent
         folder_str = str(folder)
-        if folder_str in cache:
-            return cache[folder_str]
+        
+        with self._lock:
+            if folder_str in cache:
+                return cache[folder_str]
 
         try:
             rel_parts = folder.relative_to(root).parts
         except ValueError:
-            cache[folder_str] = None
+            with self._lock:
+                cache[folder_str] = None
             return None
 
         if not rel_parts:
-            cache[folder_str] = None
+            with self._lock:
+                cache[folder_str] = None
             return None
 
         parent_id: Optional[int] = None
         current_path = root
         for part in rel_parts:
             current_path = current_path / part
-            g = self._db.get_or_create_group(
-                name=part, parent_id=parent_id, source_path=str(current_path)
-            )
-            parent_id = g["id"]
+            with self._lock:
+                g = self._db.get_or_create_group(
+                    name=part, parent_id=parent_id, source_path=str(current_path)
+                )
+                parent_id = g["id"]
 
-        cache[folder_str] = parent_id
+        with self._lock:
+            cache[folder_str] = parent_id
         return parent_id
